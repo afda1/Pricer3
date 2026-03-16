@@ -271,7 +271,7 @@
                 originVal,
                 destVal,
                 vehicleEl  ? (vehicleEl.value  || 'truck')    : 'truck',
-                weightEl   ? parseInt(weightEl.value  || '1000', 10) : 1000, // default: 1000 kg
+                weightEl   ? (parseInt(weightEl.value, 10) || 1000) : 1000,
                 urgencyEl  ? (urgencyEl.value  || 'standard') : 'standard',
                 hazmatEl   ? (hazmatEl.value   || 'none')     : 'none',
                 this.apiKey
@@ -354,12 +354,15 @@
 
         let dist = 0, priceVal = 0;
         if (oCoords && dCoords) {
-          const R = 6371;
-          const dLat = (dCoords[0] - oCoords[0]) * Math.PI / 180;
-          const dLon = (dCoords[1] - oCoords[1]) * Math.PI / 180;
-          const a = Math.sin(dLat/2)**2 +
-                    Math.cos(oCoords[0]*Math.PI/180)*Math.cos(dCoords[0]*Math.PI/180)*Math.sin(dLon/2)**2;
-          dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          // Haversine formula: calculates great-circle distance between two lat/lon points
+          const toRad  = deg => deg * Math.PI / 180;
+          const R      = 6371; // Earth's mean radius in km
+          const dLat   = toRad(dCoords[0] - oCoords[0]);
+          const dLon   = toRad(dCoords[1] - oCoords[1]);
+          const a      = Math.sin(dLat / 2) ** 2 +
+                         Math.cos(toRad(oCoords[0])) * Math.cos(toRad(dCoords[0])) *
+                         Math.sin(dLon / 2) ** 2;
+          dist     = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
           priceVal = dist * 2.5 + 120;
           window.drawMapRoute(oCoords, dCoords, []);
         } else {
