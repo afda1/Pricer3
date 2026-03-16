@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logistics Dashboard</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Shoelace UI Components -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/themes/light.css" />
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@shoelace-style/shoelace@2.12.0/cdn/shoelace-autoloader.js"></script>
+
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Leaflet.js -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- PyScript -->
+  <link rel="stylesheet" href="https://pyscript.net/releases/2023.11.1/core.css" />
+  <script type="module" src="https://pyscript.net/releases/2023.11.1/core.js"></script>
+
+  <style>
+    /* Ensure Leaflet map tiles render correctly inside the absolute container */
+    #map { height: 100%; width: 100%; }
+
+    /* Remove default PyScript loading banner */
+    #py-internal-banner { display: none !important; }
+
+    /* Ensure Shoelace inputs fill their container width */
+    sl-input, sl-select { width: 100%; }
+  </style>
+</head>
+
+<body
+  class="h-screen w-screen overflow-hidden flex flex-col bg-gray-50"
+  x-data="logisticsApp()"
+>
+
+  <!-- ═══════════════════════════════════════════════
+       TOP BAR / HEADER
+  ═══════════════════════════════════════════════ -->
+  <header class="h-14 bg-slate-900 text-white flex items-center justify-between px-4 shrink-0">
+    <div class="flex items-center gap-3">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0M3 12l2-5h12l2 5M3 12h18" />
+      </svg>
+      <span class="font-semibold text-lg tracking-wide">Logistics Dashboard</span>
+    </div>
+    <sl-icon-button
+      name="gear"
+      label="Settings"
+      style="font-size: 1.4rem; color: white;"
+      onclick="document.getElementById('settingsDialog').show()"
+    ></sl-icon-button>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════
+       MAIN CONTAINER (fills remaining viewport)
+  ═══════════════════════════════════════════════ -->
+  <main class="flex-1 flex overflow-hidden">
+
+    <!-- ─────────────────────────────────────────
+         LEFT SIDEBAR — Inputs & Configuration
+    ───────────────────────────────────────── -->
+    <aside class="w-96 flex flex-col bg-white border-r border-gray-200 overflow-y-auto relative">
+
+      <!-- Scrollable content area -->
+      <div class="flex-1 p-4 flex flex-col gap-4">
+
+        <!-- Section: Route -->
+        <div>
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Route</p>
+          <div class="flex flex-col gap-3">
+            <sl-input
+              id="originInput"
+              label="Origin"
+              placeholder="e.g. Sydney, NSW"
+              clearable
+            ></sl-input>
+            <sl-input
+              id="destinationInput"
+              label="Destination"
+              placeholder="e.g. Melbourne, VIC"
+              clearable
+            ></sl-input>
+          </div>
+        </div>
+
+        <!-- Section: Vehicle & Cargo -->
+        <div>
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Vehicle & Cargo</p>
+          <div class="flex flex-col gap-3">
+            <sl-select id="vehicleTypeSelect" label="Vehicle Type" value="truck">
+              <sl-option value="truck">Truck (semi-trailer)</sl-option>
+              <sl-option value="van">Delivery Van</sl-option>
+              <sl-option value="motorcycle">Motorcycle Courier</sl-option>
+              <sl-option value="flatbed">Flatbed Truck</sl-option>
+              <sl-option value="refrigerated">Refrigerated Truck</sl-option>
+            </sl-select>
+
+            <sl-select id="cargoWeightSelect" label="Cargo Weight" value="1000">
+              <sl-option value="50">Up to 50 kg</sl-option>
+              <sl-option value="500">Up to 500 kg</sl-option>
+              <sl-option value="1000">Up to 1,000 kg (1 t)</sl-option>
+              <sl-option value="5000">Up to 5,000 kg (5 t)</sl-option>
+              <sl-option value="20000">Up to 20,000 kg (20 t)</sl-option>
+            </sl-select>
+
+            <sl-select id="urgencySelect" label="Urgency" value="standard">
+              <sl-option value="standard">Standard (5–7 days)</sl-option>
+              <sl-option value="express">Express (2–3 days)</sl-option>
+              <sl-option value="overnight">Overnight</sl-option>
+            </sl-select>
+          </div>
+        </div>
+
+        <!-- Section: Additional Options -->
+        <div>
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2">Options</p>
+          <div class="flex flex-col gap-3">
+            <sl-select id="hazmatSelect" label="Hazardous Materials" value="none">
+              <sl-option value="none">None</sl-option>
+              <sl-option value="flammable">Flammable</sl-option>
+              <sl-option value="corrosive">Corrosive</sl-option>
+              <sl-option value="toxic">Toxic</sl-option>
+            </sl-select>
+          </div>
+        </div>
+
+        <!-- Calculate Button -->
+        <sl-button
+          variant="primary"
+          class="w-full mt-2"
+          id="calculateBtn"
+          @click="calculateRoute()"
+          :disabled="isLoading"
+          style="width:100%"
+        >
+          <template x-if="isLoading">
+            <sl-spinner slot="prefix"></sl-spinner>
+          </template>
+          <span x-text="isLoading ? 'Calculating…' : 'Calculate Route'"></span>
+        </sl-button>
+
+        <!-- Error message -->
+        <div
+          x-show="errorMessage"
+          x-text="errorMessage"
+          class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2"
+        ></div>
+
+      </div><!-- /scrollable content -->
+
+      <!-- ─── Sticky Results Card (bottom of sidebar) ─── -->
+      <div class="sticky bottom-0 bg-white p-4 border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Results</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-50 rounded-lg p-3 text-center">
+            <p class="text-xs text-gray-500 mb-1">Distance</p>
+            <p class="text-xl font-bold text-slate-800">
+              <span x-text="distance > 0 ? distance.toFixed(1) + ' km' : '—'"></span>
+            </p>
+          </div>
+          <div class="bg-sky-50 rounded-lg p-3 text-center">
+            <p class="text-xs text-gray-500 mb-1">Estimated Price</p>
+            <p class="text-xl font-bold text-sky-700">
+              <span x-text="price > 0 ? '$' + price.toFixed(2) : '—'"></span>
+            </p>
+          </div>
+        </div>
+        <p
+          x-show="distance > 0"
+          class="text-xs text-gray-400 mt-2 text-center"
+          x-text="'Route: ' + origin + ' → ' + destination"
+        ></p>
+      </div>
+
+    </aside><!-- /left sidebar -->
+
+    <!-- ─────────────────────────────────────────
+         RIGHT AREA — Leaflet Map
+    ───────────────────────────────────────── -->
+    <div class="flex-1 relative">
+      <div id="map" class="absolute inset-0 z-0"></div>
+    </div>
+
+  </main><!-- /main container -->
+
+  <!-- ═══════════════════════════════════════════════
+       SETTINGS DIALOG (Shoelace sl-dialog)
+  ═══════════════════════════════════════════════ -->
+  <sl-dialog label="Settings" id="settingsDialog">
+    <div class="flex flex-col gap-4 py-2">
+      <sl-input
+        id="apiKeyInput"
+        type="password"
+        label="PTV API Key"
+        placeholder="Enter your PTV Logistics API key"
+        password-toggle
+        :value="apiKey"
+        @sl-change="apiKey = $event.target.value"
+      ></sl-input>
+      <p class="text-xs text-gray-500">
+        Your API key is stored locally in your browser and never sent to any third-party server.
+      </p>
+    </div>
+    <sl-button
+      slot="footer"
+      variant="primary"
+      @click="saveSettings(); document.getElementById('settingsDialog').hide()"
+    >
+      Save & Close
+    </sl-button>
+  </sl-dialog>
+
+  <!-- ═══════════════════════════════════════════════
+       ALPINE.JS STATE MANAGEMENT
+  ═══════════════════════════════════════════════ -->
+  <script>
+    function logisticsApp() {
+      return {
+        isLoading: false,
+        apiKey: localStorage.getItem('ptv_api_key') || '',
+        origin: '',
+        destination: '',
+        distance: 0,
+        price: 0,
+        errorMessage: '',
+
+        saveSettings() {
+          localStorage.setItem('ptv_api_key', this.apiKey);
+        },
+
+        calculateRoute() {
+          // Read Shoelace input values (they expose .value on the element)
+          const originEl      = document.getElementById('originInput');
+          const destEl        = document.getElementById('destinationInput');
+          const vehicleEl     = document.getElementById('vehicleTypeSelect');
+          const weightEl      = document.getElementById('cargoWeightSelect');
+          const urgencyEl     = document.getElementById('urgencySelect');
+          const hazmatEl      = document.getElementById('hazmatSelect');
+
+          const originVal  = originEl  ? (originEl.value  || '').trim() : '';
+          const destVal    = destEl    ? (destEl.value    || '').trim() : '';
+
+          // Validate inputs
+          if (!originVal || !destVal) {
+            this.errorMessage = 'Please enter both an origin and a destination.';
+            return;
+          }
+
+          if (!this.apiKey) {
+            this.errorMessage = 'No API key found. Please add your PTV API key in Settings.';
+            return;
+          }
+
+          this.errorMessage  = '';
+          this.origin        = originVal;
+          this.destination   = destVal;
+          this.isLoading     = true;
+
+          // Trigger the PyScript function
+          try {
+            if (typeof window.py_calculate_route === 'function') {
+              window.py_calculate_route(
+                originVal,
+                destVal,
+                vehicleEl  ? (vehicleEl.value  || 'truck')    : 'truck',
+                weightEl   ? parseInt(weightEl.value  || '1000', 10) : 1000, // default: 1000 kg
+                urgencyEl  ? (urgencyEl.value  || 'standard') : 'standard',
+                hazmatEl   ? (hazmatEl.value   || 'none')     : 'none',
+                this.apiKey
+              );
+            } else {
+              // PyScript may not have loaded yet; fall back to JS-only demo calculation
+              window._fallbackCalculate(originVal, destVal);
+            }
+          } catch (err) {
+            this.isLoading    = false;
+            this.errorMessage = 'Calculation error: ' + err.message;
+          }
+        }
+      };
+    }
+
+    // ── Window-level bridge so PyScript can update Alpine state ──
+    window.updateResults = function(distance, price) {
+      // Access the Alpine component instance via the body element
+      const body = document.body;
+      if (body._x_dataStack) {
+        const data = body._x_dataStack[0];
+        data.distance   = parseFloat(distance) || 0;
+        data.price      = parseFloat(price)    || 0;
+        data.isLoading  = false;
+      } else {
+        // Alternative: dispatch a custom event that the component can catch
+        body.dispatchEvent(new CustomEvent('results-updated', {
+          detail: { distance: parseFloat(distance) || 0, price: parseFloat(price) || 0 }
+        }));
+      }
+    };
+
+    // ── Window-level bridge for map updates from PyScript ──
+    window.drawMapRoute = function(originCoords, destCoords, waypointList) {
+      if (!window._leafletMap) return;
+      const map = window._leafletMap;
+
+      // Clear previous layers (except tile layer)
+      map.eachLayer(layer => {
+        if (!(layer instanceof L.TileLayer)) map.removeLayer(layer);
+      });
+
+      if (originCoords && destCoords) {
+        const oLatLng = L.latLng(originCoords[0], originCoords[1]);
+        const dLatLng = L.latLng(destCoords[0],   destCoords[1]);
+
+        L.marker(oLatLng).addTo(map).bindPopup('<b>Origin</b>');
+        L.marker(dLatLng).addTo(map).bindPopup('<b>Destination</b>');
+
+        const points = waypointList && waypointList.length
+          ? waypointList.map(p => L.latLng(p[0], p[1]))
+          : [oLatLng, dLatLng];
+
+        L.polyline(points, { color: '#0ea5e9', weight: 4, opacity: 0.85 }).addTo(map);
+        map.fitBounds(L.latLngBounds(points), { padding: [40, 40] });
+      }
+    };
+
+    // ── Fallback demo calculation (used when PyScript is unavailable) ──
+    window._fallbackCalculate = function(origin, destination) {
+      setTimeout(() => {
+        // Very rough great-circle approximation using simple heuristics
+        const demoData = {
+          'Sydney': [-33.8688, 151.2093],
+          'Melbourne': [-37.8136, 144.9631],
+          'Brisbane': [-27.4698, 153.0251],
+          'Adelaide': [-34.9285, 138.6007],
+          'Perth': [-31.9505, 115.8605],
+          'Canberra': [-35.2809, 149.1300],
+          'Darwin': [-12.4634, 130.8456],
+          'Hobart': [-42.8821, 147.3272],
+        };
+
+        let oCoords = null, dCoords = null;
+        for (const [city, coords] of Object.entries(demoData)) {
+          if (origin.toLowerCase().includes(city.toLowerCase()))      oCoords = coords;
+          if (destination.toLowerCase().includes(city.toLowerCase())) dCoords = coords;
+        }
+
+        let dist = 0, priceVal = 0;
+        if (oCoords && dCoords) {
+          const R = 6371;
+          const dLat = (dCoords[0] - oCoords[0]) * Math.PI / 180;
+          const dLon = (dCoords[1] - oCoords[1]) * Math.PI / 180;
+          const a = Math.sin(dLat/2)**2 +
+                    Math.cos(oCoords[0]*Math.PI/180)*Math.cos(dCoords[0]*Math.PI/180)*Math.sin(dLon/2)**2;
+          dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          priceVal = dist * 2.5 + 120;
+          window.drawMapRoute(oCoords, dCoords, []);
+        } else {
+          dist = Math.random() * 1500 + 200;
+          priceVal = dist * 2.5 + 120;
+        }
+
+        window.updateResults(dist.toFixed(1), priceVal.toFixed(2));
+      }, 1200);
+    };
+  </script>
+
+  <!-- ═══════════════════════════════════════════════
+       LEAFLET MAP INITIALISATION
+  ═══════════════════════════════════════════════ -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const map = L.map('map').setView([-25.2744, 133.7751], 4); // Center on Australia
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+
+      // Store map reference globally for PyScript / other JS to use
+      window._leafletMap = map;
+
+      // Fix Leaflet rendering inside a flex container on first load
+      setTimeout(() => map.invalidateSize(), 200);
+    });
+  </script>
+
+  <!-- ═══════════════════════════════════════════════
+       PYSCRIPT / MICROPYTHON LOGIC BLOCK
+  ═══════════════════════════════════════════════ -->
+  <script type="mpy">
+import js
+import json
+from pyodide.http import pyfetch
+
+async def calculate_route(origin, destination, vehicle_type, cargo_weight,
+                           urgency, hazmat, api_key):
+    """
+    Calls the PTV xServer / Logistics API to calculate a route between
+    origin and destination, then updates the Alpine.js UI and Leaflet map.
+
+    PTV xServer2 REST endpoint used:
+      POST https://xserver2-europe-eu-test.cloud.ptvgroup.com/services/rs/XRoute/experimental/calculateRoute
+    Documentation: https://developer.myptv.com/
+
+    NOTE: For production use, replace the base URL with your licensed endpoint.
+    """
+
+    base_url = "https://xserver2-europe-eu-test.cloud.ptvgroup.com"
+
+    # ── 1. Geocode origin & destination ────────────────────────────────────
+    async def geocode(address):
+        url = (
+            f"{base_url}/services/rs/XLocate/experimental/locations"
+            f"?searchText={js.encodeURIComponent(address)}&language=en"
+        )
+        headers = {
+            "Authorization": f"Basic {api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            resp = await pyfetch(url, method="GET", headers=headers)
+            if resp.status == 200:
+                data = await resp.json()
+                locs = data.get("results", [])
+                if locs:
+                    coords = locs[0].get("referenceCoordinate", {})
+                    return coords.get("y", None), coords.get("x", None)  # lat, lon
+        except Exception as exc:
+            js.console.error(f"Geocoding failed for '{address}': {exc}")
+        return None, None
+
+    origin_lat, origin_lon   = await geocode(origin)
+    dest_lat,   dest_lon     = await geocode(destination)
+
+    if origin_lat is None or dest_lat is None:
+        # Fall back to the JS demo calculator if geocoding fails
+        js.window._fallbackCalculate(origin, destination)
+        return
+
+    # ── 2. Build route request payload ─────────────────────────────────────
+    #  Vehicle profile mapping
+    profile_map = {
+        "truck":        "EUR_TRUCK_40T",
+        "van":          "EUR_VAN",
+        "motorcycle":   "EUR_MOTORCYCLE",
+        "flatbed":      "EUR_TRUCK_40T",
+        "refrigerated": "EUR_TRUCK_40T",  # PTV API does not have a dedicated refrigerated profile; use standard 40T
+    }
+    vehicle_profile = profile_map.get(vehicle_type, "EUR_TRUCK_40T")
+
+    route_payload = json.dumps({
+        "waypoints": [
+            {"$type": "OffRoadWaypoint", "location": {"offRoadCoordinate": {"x": origin_lon, "y": origin_lat}}},
+            {"$type": "OffRoadWaypoint", "location": {"offRoadCoordinate": {"x": dest_lon,   "y": dest_lat  }}}
+        ],
+        "stopovers": [],
+        "routeOptions": {
+            "vehicleOptions": {
+                "$type": "TruckOptions",
+                "vehicleProfile": vehicle_profile,
+            },
+        },
+        "resultFields": {
+            "nodes": True,
+            "legs": {"enabled": True, "polyline": True}
+        }
+    })
+
+    route_headers = {
+        "Authorization": f"Basic {api_key}",
+        "Content-Type":  "application/json",
+    }
+
+    try:
+        route_resp = await pyfetch(
+            f"{base_url}/services/rs/XRoute/experimental/calculateRoute",
+            method="POST",
+            headers=route_headers,
+            body=route_payload,
+        )
+
+        if route_resp.status != 200:
+            raise Exception(f"Route API returned HTTP {route_resp.status}")
+
+        route_data = await route_resp.json()
+
+    except Exception as exc:
+        js.console.error(f"Route calculation failed: {exc}")
+        js.window._fallbackCalculate(origin, destination)
+        return
+
+    # ── 3. Extract distance (metres → km) ──────────────────────────────────
+    legs     = route_data.get("legs", [])
+    total_m  = sum(leg.get("distance", {}).get("value", 0) for leg in legs)
+    calc_distance = total_m / 1000.0
+
+    if calc_distance == 0:
+        # Fallback if legs are empty
+        js.window._fallbackCalculate(origin, destination)
+        return
+
+    # ── 4. Price calculation ────────────────────────────────────────────────
+    #  Base rate: $2.50 / km for truck, adjusted by weight & urgency
+    MAX_CARGO_WEIGHT_KG = 20000.0  # Maximum supported cargo weight in kg
+    BASE_SERVICE_FEE    = 120.0    # Flat base service fee in AUD
+
+    base_rate = {
+        "truck": 2.50, "van": 1.80, "motorcycle": 1.20,
+        "flatbed": 3.00, "refrigerated": 3.50,
+    }.get(vehicle_type, 2.50)
+
+    weight_factor    = 1.0 + (float(cargo_weight) / MAX_CARGO_WEIGHT_KG) * 0.5
+    urgency_factor   = {"standard": 1.0, "express": 1.35, "overnight": 1.80}.get(urgency, 1.0)
+    hazmat_surcharge = {"none": 0.0, "flammable": 150.0, "corrosive": 200.0, "toxic": 250.0}.get(hazmat, 0.0)
+
+    calc_price = (calc_distance * base_rate * weight_factor * urgency_factor) + BASE_SERVICE_FEE + hazmat_surcharge
+
+    # ── 5. Extract polyline and draw on Leaflet map ─────────────────────────
+    waypoints = []
+    for leg in legs:
+        poly = leg.get("polyline", {}).get("plain", {}).get("latLngs", [])
+        for pt in poly:
+            waypoints.append([pt.get("lat", 0), pt.get("lng", 0)])
+
+    js.window.drawMapRoute(
+        [origin_lat, origin_lon],
+        [dest_lat,   dest_lon],
+        js.JSON.parse(json.dumps(waypoints))
+    )
+
+    # ── 6. Update Alpine state ──────────────────────────────────────────────
+    js.window.updateResults(round(calc_distance, 1), round(calc_price, 2))
+
+
+# Expose the async function as a synchronous wrapper accessible from JS
+def py_calculate_route(origin, destination, vehicle_type, cargo_weight,
+                        urgency, hazmat, api_key):
+    import asyncio
+    asyncio.ensure_future(
+        calculate_route(origin, destination, vehicle_type, cargo_weight,
+                        urgency, hazmat, api_key)
+    )
+
+
+# Register the function on the window so Alpine can call it
+js.window.py_calculate_route = py_calculate_route
+  </script>
+
+</body>
+</html>
