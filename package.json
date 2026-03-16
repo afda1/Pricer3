@@ -1,0 +1,14 @@
+{
+  "name": "pricer3-logistics-dashboard",
+  "version": "1.0.0",
+  "description": "Single-file logistics route-pricing dashboard (Tailwind + Shoelace + Alpine + Leaflet + PyScript)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "keywords": ["logistics", "dashboard", "pyscript", "leaflet", "alpine"],
+  "license": "MIT"
+}
